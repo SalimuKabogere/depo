@@ -90,7 +90,11 @@
             })
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById("result").innerText = `Prediction: ${data.prediction} (Confidence: ${data.confidence})`;
+                    if (data.error) {
+                        document.getElementById("result").innerText = `Error: ${data.error}`;
+                    } else {
+                        document.getElementById("result").innerText = `Prediction: ${data.result} (Confidence: ${data.confidence.toFixed(2)})`;
+                    }
                 })
                 .catch(error => {
                     document.getElementById("result").innerText = "Error: Unable to process the request.";

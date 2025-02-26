@@ -1,55 +1,86 @@
-import os
 from flask import Flask, request, jsonify, render_template
 import torch
-import torchvision.transforms as transforms
-from PIL import Image
-import torchvision.models as models
 import torch.nn as nn
+import numpy as np
+import cv2
+from skimage.feature import hog
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Load the trained model
-model = models.efficientnet_b0(pretrained=False)
-num_features = model.classifier[1].in_features
-model.classifier = nn.Sequential(
-    nn.Linear(num_features, 128),
-    nn.ReLU(),
-    nn.Dropout(0.5),
-    nn.Linear(128, 1),
-    nn.Sigmoid()
-)
-model.load_state_dict(torch.load("efficientnet_fake_currency_model.pth", map_location=torch.device("cpu")))
+# Define the same neural network model as before
+class CurrencyClassifier(nn.Module):
+    def __init__(self, input_size):
+        super(CurrencyClassifier, self).__init__()
+        self.fc1 = nn.Linear(input_size, 128)  # Use the correct input size
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 2)  # 2 classes: Real & Fake
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.fc3(x)  # No softmax, CrossEntropyLoss handles it
+        return x
+
+# Initialize and load the model
+input_size = 8868  # Update this to the correct input size
+model = CurrencyClassifier(input_size)
+model_path = "C:\\Users\\ASTRA\\Desktop\\ML\\myproject\\myapp\\random_fake_currency_model.pth"
+model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
 
-# Define image transformations
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
+# Function to extract features (same as before)
+def extract_features(image):
+    if image is None:
+        return None  # Skip invalid images
 
+    image = cv2.resize(image, (128, 128))
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    hog_features, _ = hog(gray, orientations=9, pixels_per_cell=(8, 8),
+                          cells_per_block=(2, 2), visualize=True, block_norm="L2-Hys")
+
+    hist_b = cv2.calcHist([image], [0], None, [256], [0, 256]).flatten()
+    hist_g = cv2.calcHist([image], [1], None, [256], [0, 256]).flatten()
+    hist_r = cv2.calcHist([image], [2], None, [256], [0, 256]).flatten()
+
+    hist_b /= np.sum(hist_b) if np.sum(hist_b) != 0 else 1
+    hist_g /= np.sum(hist_g) if np.sum(hist_g) != 0 else 1
+    hist_r /= np.sum(hist_r) if np.sum(hist_r) != 0 else 1
+
+    features = np.hstack([hog_features, hist_b, hist_g, hist_r])
+    return features
+
+# Route to serve the index.html page
 @app.route('/')
 def home():
     return render_template('index.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    
     file = request.files['file']
-    img = Image.open(file).convert('RGB')
-    img = transform(img).unsqueeze(0)
+    if not file:
+        return jsonify({'error': 'No file provided'}), 400
 
-    with torch.no_grad():
-        output = model(img)
-        prediction = "Real" if output.item() > 0.5 else "Fake"
-        confidence = output.item() * 100 if output.item() > 0.5 else (1 - output.item()) * 100
+    # Read the image
+    np_img = np.frombuffer(file.read(), np.uint8)
+    img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
 
-    return jsonify({'prediction': prediction, 'confidence': f"{confidence:.2f}%"})
+    # Extract features
+    features = extract_features(img)
+    if features is None:
+        return jsonify({'error': 'Invalid image'}), 400
 
-# Ensure the app runs on the assigned port from Render
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
-    app.run(host="0.0.0.0", port=port)
+    # Convert features to tensor and make prediction
+    input_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
+    output = model(input_tensor)
+    _, predicted = torch.max(output, 1)
+    result = "Real" if predicted.item() == 0 else "Fake"
+    confidence = torch.softmax(output, dim=1)[0][predicted.item()].item()
+
+    print(f"Prediction: {result}, Confidence: {confidence}")
+
+    return jsonify({'result': result, 'confidence': confidence})
+
+if __name__ == '__main__':
+    app.run(debug=True)
