@@ -4,6 +4,7 @@ import torch.nn as nn
 import numpy as np
 import cv2
 from skimage.feature import hog
+import os
 
 app = Flask(__name__)
 
@@ -25,7 +26,12 @@ class CurrencyClassifier(nn.Module):
 # Initialize and load the model
 input_size = 8868  # Update this to the correct input size
 model = CurrencyClassifier(input_size)
-model_path = "C:\\Users\\ASTRA\\Desktop\\ML\\myproject\\myapp\\random_fake_currency_model.pth"
+
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Use a relative path to the model file
+model_path = os.path.join(script_dir, 'random_fake_currency_model.pth')
 model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
 
