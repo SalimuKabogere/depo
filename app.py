@@ -8,7 +8,8 @@ from skimage.feature import hog
 import os
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
+
 
 # Define the same neural network model as before
 class CurrencyClassifier(nn.Module):
