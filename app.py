@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 import torch
 import torch.nn as nn
 import numpy as np
@@ -7,6 +8,7 @@ from skimage.feature import hog
 import os
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Define the same neural network model as before
 class CurrencyClassifier(nn.Module):
