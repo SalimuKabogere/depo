@@ -87,7 +87,7 @@
             formData.append("file", fileInput.files[0]);
             resultText.innerText = "Processing...";
 
-            fetch("https://majja.onrender.com/", {
+            fetch("https://majja.onrender.com/predict", {
                 method: "POST",
                 body: formData
             })

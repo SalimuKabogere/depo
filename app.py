@@ -7,7 +7,7 @@ import cv2
 from skimage.feature import hog
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')  # Add this
 CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
 
 
